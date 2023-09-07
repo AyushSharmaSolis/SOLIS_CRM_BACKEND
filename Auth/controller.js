@@ -6,6 +6,7 @@ const { Role } = require("../role/model");
 
 require("dotenv").config();
 module.exports = {
+  
   // ------------Register-------------------------
   register: (req, res) => {
     Users.findOne({ email: req.body.email }).then((user) => {
