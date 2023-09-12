@@ -30,7 +30,7 @@ const LeadSchema = new mongoose.Schema(
         isShow: { type: String, enum: ['PENDING', 'ACCEPTED', 'REJECTED'], default: 'PENDING' },
         // expireAt: { type: Date, default: Date.now, expires: 60 },
         // extendedExpireAt: { type: Date, default: null},
-        currentUser:{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        currentUser:{ type: mongoose.Schema.Types.ObjectId, ref: "User" },
         //leadHistory
         // user: { type: String },
         // createTime: { type: String },

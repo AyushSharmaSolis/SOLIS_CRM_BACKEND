@@ -290,7 +290,7 @@ module.exports = {
   },
   acceptLead: async (req, res) => {
     try {
-      // console.log(req.user._id);
+      // console.log("User Data  in Token : ",req.user);
       const isLeadUpdated = await Leads.findOneAndUpdate(
         {
           _id: req.body.id,
@@ -300,7 +300,7 @@ module.exports = {
             isShow: "ACCEPTED",
             dropAt: null,
             leadDropAt: null,
-            currentUser:req.user._id
+            currentUser: req.user._id,
           },
         },
         { new: true }
@@ -313,23 +313,154 @@ module.exports = {
           message: "This id does not exist!",
         });
       }
-        leadHistoryDataObj = {}
-        leadHistoryDataObj['lead'] = req.body.id
-        leadHistoryDataObj['updatedByUser'] = req.user.firstName
-        leadHistoryDataObj['fieldType'] ='lead updated'
-        leadHistoryDataObj['company'] = req.user.company._id
-      const historyData = await LeadHistory.create(leadHistoryDataObj)
-      return res.status(404).json({
+      leadHistoryDataObj = {};
+      leadHistoryDataObj["lead"] = req.body.id;
+      leadHistoryDataObj["updatedByUser"] = req.user.firstName;
+      leadHistoryDataObj["fieldType"] = "lead accepted";
+      leadHistoryDataObj["company"] = req.user.company._id;
+      const historyData = await LeadHistory.create(leadHistoryDataObj);
+      return res.status(200).json({
         code: "SUCCESS",
         data: isLeadUpdated,
         message: "Lead accepted",
-        historyData
+        historyData,
       });
     } catch (error) {
       console.log(error);
       return res.status(500).json({
         code: "ERROR",
         data: null,
+      });
+    }
+  },
+
+  getCustomLeadsUpdated: async (req, res) => {
+    try {
+      console.log(req?.user?.role?.slug);
+      if (
+        req?.user?.role?.slug == "superadmin" ||
+        req?.user?.role?.slug == "admin"
+      ) {
+        const leads = await Leads.find({})
+        return res.status(200).json({
+          code: "FETCHED",
+          data: leads,
+        });
+      } else {
+        const leads = await Leads.find({ company: req.user.company, currentUser:req.user._id });
+        const currentDate = new Date();
+        const updatePromises = leads.map(async (element) => {
+          const assignedUser = element.assignedUser.find(
+            (ele) => ele.id == req.user._id
+          );
+          if (
+            (assignedUser && assignedUser.managerstatus) ||
+            (assignedUser && assignedUser.leadstatus) ||
+            element.dropAt <= currentDate
+          ) {
+            if (element.isShow === "PENDING" && element.dropAt === null) {
+              const newDropAtDate = new Date(element.updatedAt);
+              newDropAtDate.setHours(newDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: newDropAtDate,
+                    currentStatus: "stage-1",
+                  },
+                },
+                { new: true }
+              );
+            } else if (
+              element.currentStatus == "stage-1" &&
+              element.isShow === "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
+              const secondDropAtDate = new Date(element.dropAt);
+              secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].managerstatus": false,
+                    "assignedUser.$[elem2].managerstatus": true,
+                    currentStatus: "stage-2",
+                  },
+                },
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else if (
+              element.currentStatus == "stage-2" &&
+              element.isShow == "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    isShow: "REJECTED",
+                  },
+                },
+                { new: true }
+              );
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt == null
+            ) {
+              const newDropAtDate = new Date(element.updatedAt);
+              newDropAtDate.setHours(newDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(element._id, {
+                $set: { leadDropAt: newDropAtDate },
+              });
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt <= currentDate
+            ) {
+              const secondDropAtDate = new Date(element.leadDropAt);
+              secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    leadDropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].leadstatus": false,
+                    "assignedUser.$[elem2].leadstatus": true,
+                  },
+                },
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else {
+              console.log("else");
+            }
+            return element;
+          }
+        });
+        const updateResults = await Promise.all(updatePromises);
+        const filteredUsers = updateResults.filter(
+          (result) => result !== undefined
+        );
+        return res.status(200).json({
+          code: "FETCHED",
+          data: filteredUsers,
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        code: "ERROR",
+        message: "Internal Server Error",
       });
     }
   },
