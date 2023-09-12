@@ -1,6 +1,6 @@
 const { Leads } = require("./modal");
 const { Users } = require("../Auth/model");
-const { LeadHistory } = require("../history/model")
+const { LeadHistory } = require("../history/model");
 var cron = require("node-cron");
 // const { ObjectId } = require('mongodb');
 module.exports = {
@@ -19,11 +19,18 @@ module.exports = {
             // progressBar:"phase-1"
           });
 
-          const leadHistory = await LeadHistory.create({ createdByUser:`${req.user.firstName} ${req.user.lastName}`, company: req.user.company, progressBar: "phase-1", fieldType: 'lead created', company: req.user.company, lead: result._id })
+          const leadHistory = await LeadHistory.create({
+            createdByUser: `${req.user.firstName} ${req.user.lastName}`,
+            company: req.user.company,
+            progressBar: "phase-1",
+            fieldType: "lead created",
+            company: req.user.company,
+            lead: result._id,
+          });
           res.status(200).json({
             code: "SUCCESS",
             data: result,
-            leadHistory: leadHistory
+            leadHistory: leadHistory,
           });
         } catch (err) {
           return res.status(200).json({
@@ -45,9 +52,12 @@ module.exports = {
     }
   },
   getCustomLeads: async (req, res) => {
-    if (req?.user?.role?.slug == "superadmin" || req?.user?.role?.slug == "admin") {
+    if (
+      req?.user?.role?.slug == "superadmin" ||
+      req?.user?.role?.slug == "admin"
+    ) {
       try {
-        const leads = await Leads.find({})
+        const leads = await Leads.find({});
         // console.log(leads)
         return res.status(200).json({
           code: "FETCHED",
@@ -61,85 +71,120 @@ module.exports = {
       }
     } else {
       try {
-        const leads = await Leads.find({ company: req.user.company })
+        const leads = await Leads.find({ company: req.user.company });
         const currentDate = new Date();
         const updatePromises = leads.map(async (element) => {
-          const assignedUser = element.assignedUser.find((ele) => ele.id == req.user._id);
-          if (assignedUser && assignedUser.managerstatus || assignedUser && assignedUser.leadstatus || element.dropAt <= currentDate) {
+          const assignedUser = element.assignedUser.find(
+            (ele) => ele.id == req.user._id
+          );
+          if (
+            (assignedUser && assignedUser.managerstatus) ||
+            (assignedUser && assignedUser.leadstatus) ||
+            element.dropAt <= currentDate
+          ) {
             if (element.isShow === "PENDING" && element.dropAt === null) {
               const newDropAtDate = new Date(element.updatedAt);
               newDropAtDate.setHours(newDropAtDate.getHours() + 1);
-              return Leads.findByIdAndUpdate(element._id, {
-                $set: {
-                  dropAt: newDropAtDate,
-                  currentStatus: "stage-1"
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: newDropAtDate,
+                    currentStatus: "stage-1",
+                  },
                 },
-              }, { new: true });
-            }
-            else if (element.currentStatus == "stage-1" && element.isShow === "PENDING" && element.dropAt <= currentDate) {
-
+                { new: true }
+              );
+            } else if (
+              element.currentStatus == "stage-1" &&
+              element.isShow === "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
               const secondDropAtDate = new Date(element.dropAt);
               secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
-              return Leads.findByIdAndUpdate(element._id, {
-                $set: {
-                  dropAt: secondDropAtDate,
-                  "assignedUser.$[elem1].managerstatus": false,
-                  "assignedUser.$[elem2].managerstatus": true,
-                  currentStatus: "stage-2"
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].managerstatus": false,
+                    "assignedUser.$[elem2].managerstatus": true,
+                    currentStatus: "stage-2",
+                  },
                 },
-              }, {
-                arrayFilters: [
-                  { "elem1.id": element.assignedUser[0].id },
-                  { "elem2.id": element.assignedUser[1].id },
-                ],
-                new: true,
-              });
-            } else if (element.currentStatus == "stage-2" && element.isShow == "PENDING" && element.dropAt <= currentDate) {
-              return Leads.findByIdAndUpdate(element._id, {
-                $set: {
-                  isShow: "REJECTED"
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else if (
+              element.currentStatus == "stage-2" &&
+              element.isShow == "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    isShow: "REJECTED",
+                  },
                 },
-              }, { new: true });
-            }
-            else if (element.isShow === "ACCEPTED" && element.leadDropAt == null) {
+                { new: true }
+              );
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt == null
+            ) {
               const newDropAtDate = new Date(element.updatedAt);
               newDropAtDate.setHours(newDropAtDate.getHours() + 1);
               return Leads.findByIdAndUpdate(element._id, {
                 $set: { leadDropAt: newDropAtDate },
               });
-            }
-            else if (element.isShow === "ACCEPTED" && element.leadDropAt <= currentDate) {
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt <= currentDate
+            ) {
               const secondDropAtDate = new Date(element.leadDropAt);
               secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
-              return Leads.findByIdAndUpdate(element._id, {
-                $set: {
-                  leadDropAt: secondDropAtDate,
-                  "assignedUser.$[elem1].leadstatus": false,
-                  "assignedUser.$[elem2].leadstatus": true,
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    leadDropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].leadstatus": false,
+                    "assignedUser.$[elem2].leadstatus": true,
+                  },
                 },
-              }, {
-                arrayFilters: [
-                  { "elem1.id": element.assignedUser[0].id },
-                  { "elem2.id": element.assignedUser[1].id },
-                ],
-                new: true,
-              });
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else {
+              console.log("else");
             }
-            else {
-              console.log("else")
-            }
-            return element
+            return element;
           }
         });
         const updateResults = await Promise.all(updatePromises);
-        const filteredUsers = updateResults.filter((result) => result !== undefined);
+        const filteredUsers = updateResults.filter(
+          (result) => result !== undefined
+        );
         return res.status(200).json({
           code: "FETCHED",
           data: filteredUsers,
         });
       } catch (error) {
         // console.error(error);
-        return res.status(500).json({ code: "ERROR", message: "Internal Server Error" });
+        return res
+          .status(500)
+          .json({ code: "ERROR", message: "Internal Server Error" });
       }
     }
   },
@@ -158,13 +203,22 @@ module.exports = {
             updatedFields[field] = incomingData[field];
           }
         }
-        const updatedLead = await Leads.findByIdAndUpdate({
-          _id: req.params.id,
-          company: req.user.company
-        }, { ...req.body })
-        const UpdatedleadHistory = await LeadHistory.create({ fieldType: 'lead updated', updatedByUser: `${req.user.firstName} ${req.user.lastName}`, updatedFields: updatedFields, company: req.user.company, lead: req.params.id })
+        const updatedLead = await Leads.findByIdAndUpdate(
+          {
+            _id: req.params.id,
+            company: req.user.company,
+          },
+          { ...req.body }
+        );
+        const UpdatedleadHistory = await LeadHistory.create({
+          fieldType: "lead updated",
+          updatedByUser: `${req.user.firstName} ${req.user.lastName}`,
+          updatedFields: updatedFields,
+          company: req.user.company,
+          lead: req.params.id,
+        });
         if (!updatedLead) {
-          return res.status(404).json({ message: 'Lead not found' });
+          return res.status(404).json({ message: "Lead not found" });
         }
         return res.status(200).json({
           code: "UPDATED",
@@ -175,7 +229,7 @@ module.exports = {
       ///
     } catch (error) {
       // console.error('Error updating lead:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      res.status(500).json({ message: "Internal server error" });
     }
   },
   UpdateStatus: async (req, res) => {
@@ -186,7 +240,7 @@ module.exports = {
       );
 
       if (!UpdateStatus) {
-        return res.status(404).json({ message: 'Lead not found' });
+        return res.status(404).json({ message: "Lead not found" });
       }
       return res.status(200).json({
         code: "UPDATED",
@@ -201,32 +255,213 @@ module.exports = {
   },
   getLeadHistroy: async (req, res) => {
     try {
-      if (req?.user?.role?.slug == "superadmin" || req?.user?.role?.slug == "admin") {
+      if (
+        req?.user?.role?.slug == "superadmin" ||
+        req?.user?.role?.slug == "admin"
+      ) {
         await LeadHistory.find({ lead: req.params.id }).then((result, err) => {
           // console.log(err)
           if (result) {
             return res.status(200).json({
               code: "FETCHED",
-              data: result
-            })
+              data: result,
+            });
           }
-        })
+        });
       } else {
-        await LeadHistory.find({ company: req.user.company, lead: req.params.id }).then((result, err) => {
+        await LeadHistory.find({
+          company: req.user.company,
+          lead: req.params.id,
+        }).then((result, err) => {
           if (result) {
             return res.status(200).json({
               code: "FETCHED",
-              data: result
-            })
+              data: result,
+            });
           }
-        })
+        });
       }
     } catch (error) {
       return res.status(500).json({
         code: "FETCHED",
-        data: error
-      })
+        data: error,
+      });
     }
-  }
-};
+  },
+  acceptLead: async (req, res) => {
+    try {
+      // console.log("User Data  in Token : ",req.user);
+      const isLeadUpdated = await Leads.findOneAndUpdate(
+        {
+          _id: req.body.id,
+        },
+        {
+          $set: {
+            isShow: "ACCEPTED",
+            dropAt: null,
+            leadDropAt: null,
+            currentUser: req.user._id,
+          },
+        },
+        { new: true }
+      );
+      // console.log("Leads Data : ", isLeadUpdated);
+      if (!isLeadUpdated) {
+        return res.status(404).json({
+          code: "ERROR",
+          data: null,
+          message: "This id does not exist!",
+        });
+      }
+      leadHistoryDataObj = {};
+      leadHistoryDataObj["lead"] = req.body.id;
+      leadHistoryDataObj["updatedByUser"] = req.user.firstName;
+      leadHistoryDataObj["fieldType"] = "lead accepted";
+      leadHistoryDataObj["company"] = req.user.company._id;
+      const historyData = await LeadHistory.create(leadHistoryDataObj);
+      return res.status(200).json({
+        code: "SUCCESS",
+        data: isLeadUpdated,
+        message: "Lead accepted",
+        historyData,
+      });
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({
+        code: "ERROR",
+        data: null,
+      });
+    }
+  },
 
+  getCustomLeadsUpdated: async (req, res) => {
+    try {
+      console.log(req?.user?.role?.slug);
+      if (
+        req?.user?.role?.slug == "superadmin" ||
+        req?.user?.role?.slug == "admin"
+      ) {
+        const leads = await Leads.find({})
+        return res.status(200).json({
+          code: "FETCHED",
+          data: leads,
+        });
+      } else {
+        const leads = await Leads.find({ company: req.user.company, currentUser:req.user._id });
+        const currentDate = new Date();
+        const updatePromises = leads.map(async (element) => {
+          const assignedUser = element.assignedUser.find(
+            (ele) => ele.id == req.user._id
+          );
+          if (
+            (assignedUser && assignedUser.managerstatus) ||
+            (assignedUser && assignedUser.leadstatus) ||
+            element.dropAt <= currentDate
+          ) {
+            if (element.isShow === "PENDING" && element.dropAt === null) {
+              const newDropAtDate = new Date(element.updatedAt);
+              newDropAtDate.setHours(newDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: newDropAtDate,
+                    currentStatus: "stage-1",
+                  },
+                },
+                { new: true }
+              );
+            } else if (
+              element.currentStatus == "stage-1" &&
+              element.isShow === "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
+              const secondDropAtDate = new Date(element.dropAt);
+              secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    dropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].managerstatus": false,
+                    "assignedUser.$[elem2].managerstatus": true,
+                    currentStatus: "stage-2",
+                  },
+                },
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else if (
+              element.currentStatus == "stage-2" &&
+              element.isShow == "PENDING" &&
+              element.dropAt <= currentDate
+            ) {
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    isShow: "REJECTED",
+                  },
+                },
+                { new: true }
+              );
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt == null
+            ) {
+              const newDropAtDate = new Date(element.updatedAt);
+              newDropAtDate.setHours(newDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(element._id, {
+                $set: { leadDropAt: newDropAtDate },
+              });
+            } else if (
+              element.isShow === "ACCEPTED" &&
+              element.leadDropAt <= currentDate
+            ) {
+              const secondDropAtDate = new Date(element.leadDropAt);
+              secondDropAtDate.setHours(secondDropAtDate.getHours() + 1);
+              return Leads.findByIdAndUpdate(
+                element._id,
+                {
+                  $set: {
+                    leadDropAt: secondDropAtDate,
+                    "assignedUser.$[elem1].leadstatus": false,
+                    "assignedUser.$[elem2].leadstatus": true,
+                  },
+                },
+                {
+                  arrayFilters: [
+                    { "elem1.id": element.assignedUser[0].id },
+                    { "elem2.id": element.assignedUser[1].id },
+                  ],
+                  new: true,
+                }
+              );
+            } else {
+              console.log("else");
+            }
+            return element;
+          }
+        });
+        const updateResults = await Promise.all(updatePromises);
+        const filteredUsers = updateResults.filter(
+          (result) => result !== undefined
+        );
+        return res.status(200).json({
+          code: "FETCHED",
+          data: filteredUsers,
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        code: "ERROR",
+        message: "Internal Server Error",
+      });
+    }
+  },
+};

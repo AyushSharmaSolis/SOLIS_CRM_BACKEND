@@ -11,7 +11,7 @@ const leadHistorySchema = new mongoose.Schema(
         updatedFields :{type:Array},
         updateByTime : {type:String},
         lead:{ type: mongoose.Schema.Types.ObjectId,required: true },
-        fieldType:{ type: String, enum: ['lead created','lead updated'], default: null },
+        fieldType:{ type: String, enum: ['lead created','lead updated', 'lead accepted'], default: null },
         // firstMeeting:{type:String},
         // meetingType:{type:String},
         company:{ type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },

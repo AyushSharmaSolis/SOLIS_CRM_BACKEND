@@ -1,80 +1,67 @@
 const { verify } = require("jsonwebtoken");
-const {Users} = require("./Auth/model");
-const {Role} = require("./role/model");
-const fs = require("fs");
-
+const { Users } = require("./Auth/model");
+const { Role } = require("./role/model");
+const util = require("util");
+const verifyPromise = util.promisify(verify);
+const NodeCache = require("node-cache");
+const myCache = new NodeCache();
 
 module.exports = {
-   checkToken : async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+  checkToken: async (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
     try {
-      if (token) {
-        verify(token, process.env.TOKEN_KEY, async (err, decoded) => {
-          if (err) {
-            return res.status(404).json({
-              code: 'INVALIDTOKEN',
-              data: err,
-            });
-          } else {
-            const result = await Users.findById(decoded._id).populate({
-              path: 'company',
-              populate: {
-                path: 'plan',
-                model: 'plan',
-              },
-            });
-            if (result) {
-              const currentDate = new Date().toISOString().substring(0, 10);
-              const expiredOn = result.company && result.company.expireOn;
-            
-              if (expiredOn <= currentDate) {
-                return res.status(200).json({
-                  code: 'PLANEXPIRED',
-                  body: {
-                    token: token,
-                    verified: true,
-                  },
-                });
-              } else {
-                try {
-                  const roleData = await Role.findById(result.role).exec();
-            
-              
-                  if (roleData) {
-                    result.role = roleData;
-                    req.user = result;
-                    req.roleData = roleData;
-                    next();
-                  }
-                } catch (err) {
-                  console.error(err);
-                  // Handle the error as needed
-                }
-              }
-            } else {
-              console.log(err)
-              return res.status(200).json({
-                code: 'USERNOTFOUND',
-                data: err,
-              });
-            }
-          }
-        });
+      if (!token) {
+        return res.status(401).json({ code: "UNAUTHORIZED" });
+      }
+      // Check if data exists in the cache
+      if (myCache.has("userData")) {
+        // Retrieve data from the cache
+        const cachedValue = myCache.get("userData");
+        // console.log("Cached Value:", cachedValue);
+        req.user = cachedValue
+        next()
       } else {
-        return res.status(401).json({
-          code: 'UNAUTHORIZED',
-        });
+        const decoded = await verifyPromise(token, process.env.TOKEN_KEY);
+        // console.log(decoded);
+        const [user, roleData] = await Promise.all([
+          Users.findById(decoded._id).populate({
+            path: "company",
+            populate: {
+              path: "plan",
+              model: "plan",
+            },
+          }),
+          Role.findById(decoded.role).exec(),
+        ]);
+        if (!user) {
+          return res.status(404).json({ code: "USERNOTFOUND" });
+        }
+        const currentDate = new Date().toISOString().substring(0, 10);
+        const expiredOn = user.company && user.company.expireOn;
+        if (expiredOn <= currentDate) {
+          return res.status(403).json({
+            code: "PLANEXPIRED",
+            body: {
+              token: token,
+              verified: true,
+            },
+          });
+        }
+        user.role = roleData;
+        req.user = user;
+        req.roleData = roleData;
+        myCache.set("userData", req.user, 7200); // Cache data for 2 hour (7200 seconds)
+        next();
       }
     } catch (error) {
-      console.log(error);
+      console.error(error);
       return res.status(500).json({
-        code: 'SERVERERROR',
+        code: "SERVERERROR",
         error: error.message,
       });
     }
-  }
-  
+  },
 
   // superAdmin: async (req, res, next) => {
   //   try {
@@ -151,8 +138,4 @@ module.exports = {
   //       .end();
   //   }
   // },
-
-
-
-
 };
